@@ -1,0 +1,17 @@
+.venv/
+.idea/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+docs/*.aux
+docs/*.log
+docs/*.bbl
+docs/*.bcf
+docs/*.blg
+docs/*.run.xml
+docs/*.toc
+docs/*.out
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.synctex.gz
+*.iml
