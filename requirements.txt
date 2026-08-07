@@ -1,5 +1,14 @@
+
+# Manipulación, limpieza y transformación de datos con DataFrames.
 pandas==2.3.3
+# Procesamiento distribuido de datos mediante Apache Spark con Python.
 pyspark==3.5.0
+
+# Generación de gráficos de tiempos, speedup, eficiencia y escalabilidad.
 matplotlib==3.11.1
+
+# Operaciones numéricas y soporte para cálculos estadísticos.
 numpy==1.26.4
+
+# Ejecución y visualización del notebook del proyecto.
 jupyter==1.1.1
