@@ -1,8 +1,12 @@
+# Entorno virtual de Python
 .venv/
 .idea/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+*.iml
+# Archivos que se generan al compilar la documentación
 docs/*.aux
 docs/*.log
 docs/*.bbl
@@ -14,4 +18,3 @@ docs/*.out
 docs/*.fls
 docs/*.fdb_latexmk
 docs/*.synctex.gz
-*.iml
