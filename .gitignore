@@ -19,4 +19,4 @@ docs/*.fls
 docs/*.fdb_latexmk
 docs/*.synctex.gz
 data/solicitudes_reserva.csvdata/pandas/T3_join.csv
-data/spark/T3_join/
+
