@@ -498,3 +498,503 @@ recursos para flujos de trabajo basados en DAG, como los de Spark, es en s\'i
 mismo un problema de optimizaci\'on costo--rendimiento: la literatura arbitrada
 propone recomendadores que, dado un flujo y un objetivo de plazo, seleccionan
 tipo y n\'umero de instancias minimizando el costo monetario, precisamente
+porque a\~nadir nodos m\'as all\'a del l\'imite de Amdahl solo incrementa la
+factura sin reducir el tiempo \cite{asemanmanzar2023}, \cite{amdahl1967}.
+
+En cuanto a arquitecturas de referencia, la arquitectura \emph{Lambda} combina
+una capa por lotes, que reprocesa peri\'odicamente el hist\'orico completo, con
+una capa de velocidad que procesa el flujo reciente, unificando ambas vistas en
+la capa de servicio; la arquitectura \emph{Kappa} elimina la capa por lotes y
+trata todo como flujo reprocesable desde un log inmutable
+\cite{armbrust2018}. Para el dominio FUVV, una Kappa sobre Spark Structured
+Streaming resulta natural, como se argumenta en la
+Secci\'on~\ref{sec:preguntas}.
+
+\section{Procedimiento aplicado}
+\label{sec:procedimiento}
+
+\subsection{Entorno de ejecuci\'on y cl\'uster Spark Standalone}
+\label{sec:entorno}
+El experimento se ejecut\'o en una estaci\'on de trabajo local con Python 3.12 y
+las versiones fijadas en \texttt{requirements.txt}: PySpark 3.5.0, pandas 2.3.3,
+NumPy 1.26.4 y matplotlib 3.11.1. A diferencia del modo \texttt{local[N]}, que
+simula paralelismo con hilos dentro de un solo proceso JVM, se levant\'o un
+cl\'uster \emph{Spark Standalone real}, con un proceso master en
+\texttt{spark://127.0.0.1:7077}, un worker registrado y $N$ procesos executor
+JVM independientes de un core y \SI{512}{\mebi\byte} de memoria cada uno. El
+c\'odigo de creaci\'on de la sesi\'on (Listado~\ref{lst:sesion}) exige que los
+$N$ executors est\'en efectivamente registrados antes de medir, verifica
+mediante el \texttt{StatusTracker} que el n\'umero de executors (excluido el
+driver) coincida con el solicitado, aborta si el master resultara
+\texttt{local[N]}, y documenta la configuraci\'on efectiva obtenida con
+\texttt{spark.sparkContext.getConf().getAll()}, tal como exige la gu\'ia. Los
+par\'ametros \texttt{spark.sql.shuffle.partitions} y
+\texttt{spark.default.parallelism} se fijaron en $N$ para que el n\'umero de
+particiones de shuffle acompa\~ne al n\'umero de executors. La
+Tabla~\ref{tab:config} declara las versiones y la configuraci\'on efectiva del
+experimento, requisito de la gu\'ia para la trazabilidad de las mediciones.
+Cada configuraci\'on de $N$ executors emple\'o una sesi\'on independiente,
+creada y destruida en orden, de modo que ninguna medici\'on hereda cach\'es ni
+estado de una configuraci\'on anterior.
+
+\begin{table}[!t]
+\centering
+\caption{Versiones de software y configuraci\'on efectiva del cl\'uster.}
+\label{tab:config}
+\footnotesize
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Elemento} & \textbf{Valor declarado}\\
+\midrule
+Python & 3.12\\
+PySpark & 3.5.0\\
+pandas & 2.3.3\\
+NumPy & 1.26.4\\
+matplotlib & 3.11.1\\
+Gestor de cl\'uster & Spark Standalone\\
+\texttt{spark.master} & \texttt{spark://127.0.0.1:7077}\\
+\texttt{spark.executor.instances} & 1, 2 y 4\\
+\texttt{spark.executor.cores} & 1\\
+\texttt{spark.executor.memory} & \SI{512}{\mebi\byte}\\
+\texttt{spark.cores.max} & igual a $N$\\
+\texttt{spark.sql.shuffle.partitions} & igual a $N$\\
+\texttt{spark.default.parallelism} & igual a $N$\\
+Reloj de medici\'on & \texttt{time.perf\_counter()}\\
+Repeticiones & 5 + 1 calentamiento\\
+Estad\'istico central & Mediana\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[caption={Creaci\'on y verificaci\'on de la sesi\'on Spark sobre el cl\'uster Standalone (extracto de \texttt{src/medicion.py}).},label={lst:sesion}]
+def crear_spark_session(executors: int) -> SparkSession:
+    """Conecta con Spark Standalone y exige N executors registrados."""
+    spark = (
+        SparkSession.builder.master(SPARK_MASTER)  # spark://127.0.0.1:7077
+        .appName(f"PE-U4-benchmark-executors-{executors}")
+        .config("spark.executor.instances", str(executors))
+        .config("spark.executor.cores", "1")
+        .config("spark.cores.max", str(executors))
+        .config("spark.executor.memory", "512m")
+        .config("spark.sql.shuffle.partitions", str(executors))
+        .config("spark.default.parallelism", str(executors))
+        .getOrCreate()
+    )
+    # Espera activa: N executors registrados (el StatusTracker incluye al driver)
+    limite = time.monotonic() + 60
+    while time.monotonic() < limite:
+        registrados = max(0, len(
+            spark.sparkContext._jsc.sc()
+                 .statusTracker().getExecutorInfos()) - 1)
+        if registrados == executors:
+            break
+        time.sleep(1)
+    else:
+        spark.stop()
+        raise RuntimeError("Spark Standalone no registro los executors")
+    conf = dict(spark.sparkContext.getConf().getAll())
+    if conf.get("spark.master", "").startswith("local"):
+        spark.stop()
+        raise RuntimeError("master local[N] no es un cluster real")
+    return spark
+\end{lstlisting}
+
+\subsection{Conjunto de datos: declaraci\'on y documentaci\'on}
+\label{sec:dataset}
+El dominio FUVV corresponde a un sistema acad\'emico interno cuyos datos
+operacionales contienen informaci\'on personal de estudiantes y docentes y no
+est\'an publicados; tras revisar Kaggle y los portales de datos abiertos de
+Ecuador no se hall\'o un conjunto real p\'ublico con el esquema de solicitudes
+de reserva de laboratorios y el volumen exigido. En consecuencia, y acogi\'endose
+a la excepci\'on prevista en la gu\'ia, \textbf{se declara expl\'icitamente que
+el conjunto de datos es sint\'etico}, generado con el script propio
+\texttt{src/generar\_dataset.py} con semilla fija \texttt{20260804}, publicado
+en el repositorio junto con su comando de verificaci\'on
+(\texttt{python src/generar\_dataset.py --verificar}). Dos regeneraciones
+consecutivas con la misma semilla produjeron huellas SHA-256 id\'enticas,
+documentadas en \texttt{data/README\_dataset.md}, lo que garantiza la
+reproducibilidad exacta del insumo. La decisi\'on se justifica porque permite
+controlar el volumen, conservar el esquema conceptual del PFC y evitar el uso
+de informaci\'on personal real.
+
+El conjunto consta de una tabla de hechos de \num{500000} solicitudes de
+reserva con 14 columnas (identificadores UUID, fechas, horas, participantes,
+motivo, estado y marcas temporales) y una tabla dimensional de 40 laboratorios
+con 10 columnas, relacionadas 1:N mediante \texttt{laboratorio\_id}. La
+Tabla~\ref{tab:dataset} documenta fuente, URL, licencia, fecha, registros,
+columnas y tama\~no en disco. Ambas tablas se cargaron en pandas y en DataFrames
+de PySpark con esquema expl\'icito, verificando en los dos motores el conteo de
+\num{500000} y \num{40} registros y la coincidencia del esquema inferido.
+
+\begin{table*}[!t]
+\centering
+\caption{Documentaci\'on del conjunto de datos sint\'etico declarado (dominio FUVV).}
+\label{tab:dataset}
+\footnotesize
+\begin{tabular}{@{}lllcS[table-format=6.0]S[table-format=2.0]S[table-format=9.0]@{}}
+\toprule
+\textbf{Archivo} & \textbf{Fuente} & \textbf{Lic.} & \textbf{Fecha gen.} & {\textbf{Registros}} & {\textbf{Cols.}} & {\textbf{Tama\~no (\si{\byte})}}\\
+\midrule
+\texttt{solicitudes\_reserva.csv} & Sint\'etica (\texttt{generar\_dataset.py}, semilla 20260804) & MIT & 2026-08-05 & 500000 & 14 & 176712866\\
+\texttt{laboratorios.csv} & Sint\'etica (\texttt{generar\_dataset.py}, semilla 20260804) & MIT & 2026-08-05 & 40 & 10 & 8754\\
+\bottomrule
+\end{tabular}
+
+\vspace{0.4em}
+\parbox{0.92\textwidth}{\footnotesize URL permanente del script generador y del
+conjunto: \texttt{https://github.com/ffarinangog2/pe-u4-spark-equipo-c}. Los
+conteos excluyen la fila de encabezado; los tama\~nos y las huellas SHA-256 se
+documentan en \texttt{data/README\_dataset.md}.}
+\end{table*}
+
+\subsection{Implementaci\'on secuencial con pandas}
+\label{sec:pandas}
+Las cinco transformaciones exigidas se implementaron en
+\texttt{src/transformaciones\_pandas.py} como funciones puras sin efectos de
+carga, de modo que la medici\'on pudiera controlarse externamente:
+
+\begin{itemize}
+\item \textbf{T1 --- filtrado compuesto y selecci\'on:} solicitudes con
+\texttt{estado = APROBADA}, \texttt{numero\_participantes} $\geq 25$ y
+\texttt{fecha\_reserva} en el rango inclusivo 2024-07-01 a 2025-06-30,
+proyectando siete columnas.
+\item \textbf{T2 --- agrupaci\'on con tres agregaciones:} \texttt{groupby} por
+\texttt{laboratorio\_id} con conteo de solicitudes, promedio y m\'aximo de
+participantes.
+\item \textbf{T3 --- join:} \emph{inner join} N:1 de las \num{500000}
+solicitudes con la dimensi\'on de 40 laboratorios mediante
+\texttt{laboratorio\_id}, validado como \texttt{many\_to\_one}.
+\item \textbf{T4 --- columna derivada compleja:} puntaje determinista de
+prioridad que combina participantes por duraci\'on en minutos con bonos por
+ocupaci\'on ($\geq \SI{90}{\percent}$: 1000; $\geq \SI{75}{\percent}$: 500),
+anticipaci\'on ($\leq 7$ d\'ias: 300), fin de semana (200) y estado aprobado
+(100).
+\item \textbf{T5 --- ordenamiento y top-N:} las 20 solicitudes de mayor
+demanda con orden estable por participantes y duraci\'on descendentes y fecha e
+identificador ascendentes.
+\end{itemize}
+
+El Listado~\ref{lst:pandasT4} muestra el n\'ucleo de T4, la transformaci\'on
+m\'as costosa del pipeline. Cada transformaci\'on se ejecut\'o de manera
+independiente, sin reutilizar resultados intermedios de la anterior (T4 recibe
+el join reconstruido, no el resultado medido de T3), para que los tiempos
+individuales fueran comparables, y sus salidas se persistieron en formato CSV en
+\texttt{data/pandas/}. Las funciones validan expl\'icitamente el esquema de
+entrada y generan errores descriptivos ante columnas ausentes, y todas las
+conversiones temporales se realizan con \verb|errors="raise"| para que
+ninguna fila malformada pase inadvertida; la implementaci\'on evita bucles de
+Python en favor de operaciones vectorizadas (m\'ascaras, \texttt{mask},
+aritm\'etica de series), que es la condici\'on para que la comparaci\'on con
+Spark enfrente a pandas en su mejor forma y no a una implementaci\'on ingenua.
+El ordenamiento de T5 emplea el algoritmo estable \texttt{mergesort} para
+garantizar el desempate determinista que la verificaci\'on de equivalencia
+exige.
+
+\begin{lstlisting}[caption={N\'ucleo de la columna derivada T4 en pandas (extracto de \texttt{src/transformaciones\_pandas.py}).},label={lst:pandasT4}]
+inicio = pd.to_timedelta(resultado["hora_inicio"], errors="raise")
+fin = pd.to_timedelta(resultado["hora_fin"], errors="raise")
+duracion_minutos = ((fin - inicio).dt.total_seconds() // 60).astype("int64")
+
+ocupacion_por_cien = participantes * 100
+bono_ocupacion = pd.Series(0, index=resultado.index, dtype="int64")
+bono_ocupacion = bono_ocupacion.mask(ocupacion_por_cien >= capacidad * 75, 500)
+bono_ocupacion = bono_ocupacion.mask(ocupacion_por_cien >= capacidad * 90, 1000)
+
+bono_antelacion = antelacion_dias.le(7).astype("int64") * 300
+bono_fin_semana = fecha_reserva.dt.dayofweek.ge(5).astype("int64") * 200
+bono_aprobada = resultado["estado"].eq("APROBADA").astype("int64") * 100
+
+resultado["puntaje_prioridad"] = (
+    participantes * duracion_minutos
+    + bono_ocupacion + bono_antelacion
+    + bono_fin_semana + bono_aprobada
+).astype("int64")
+\end{lstlisting}
+
+\subsection{Implementaci\'on distribuida con PySpark}
+\label{sec:pyspark}
+Las mismas cinco transformaciones se implementaron sobre DataFrames de PySpark
+en \texttt{src/transformaciones\_spark.py}, cuidando la equivalencia sem\'antica
+exacta con pandas: el rango de fechas de T1 es inclusivo en ambos extremos; T4
+reproduce la normalizaci\'on UTC de fechas de pandas extrayendo la subcadena
+ISO \texttt{YYYY-MM-DD} para neutralizar el efecto de
+\texttt{spark.sql.session.timeZone}; y T5 aplica los mismos cuatro criterios de
+ordenaci\'on con desempate estable. El Listado~\ref{lst:sparkT4} muestra el
+n\'ucleo equivalente de T4. Dado el modelo de evaluaci\'on perezosa descrito en
+la Secci\'on~\ref{sec:spark}, cada medici\'on forz\'o la materializaci\'on con
+una acci\'on expl\'icita (\texttt{count()} sobre el DataFrame resultante), de
+modo que el tiempo registrado incluye la ejecuci\'on real del DAG y no solo su
+construcci\'on. Para T3, la transformaci\'on con shuffle designada para el
+an\'alisis de escalabilidad, se midi\'o adicionalmente con 1, 2 y 4 executors,
+creando para cada configuraci\'on una sesi\'on independiente verificada seg\'un
+el Listado~\ref{lst:sesion}. Las salidas de las cinco transformaciones se
+escribieron en \texttt{data/spark/}.
+
+Tres decisiones de implementaci\'on merecen justificaci\'on por su efecto sobre
+las mediciones. Primera: no se aplic\'o \texttt{broadcast} al DataFrame de
+laboratorios pese a que sus 40 filas lo har\'ian candidato natural, porque el
+objetivo experimental de T3 es observar el comportamiento de una
+transformaci\'on con shuffle frente al n\'umero de executors; forzar un join
+por difusi\'on habr\'ia eliminado precisamente el fen\'omeno bajo estudio y
+habr\'ia hecho inaplicable el an\'alisis de Amdahl. Segunda: no se emple\'o
+\texttt{cache()} ni \texttt{persist()} en ning\'un punto del pipeline, de modo
+que cada medici\'on parte de la lectura del origen y ninguna transformaci\'on
+se beneficia del trabajo de la anterior. Tercera: la lectura del CSV se
+realiz\'o con esquema expl\'icito en lugar de inferencia autom\'atica, porque la
+inferencia exige una pasada adicional completa sobre el archivo y habr\'ia
+contaminado los tiempos con un costo ajeno a la transformaci\'on medida. En
+conjunto, las tres decisiones sesgan el experimento en contra de PySpark en
+t\'erminos absolutos, lo que refuerza la validez de las conclusiones cuando el
+speedup s\'i supera la unidad.
+
+El notebook
+\texttt{notebooks/PE\_U4\_pipeline\_spark.ipynb} conserva las salidas de todas
+las celdas y se exporta tambi\'en como HTML.
+
+\begin{lstlisting}[caption={N\'ucleo de la columna derivada T4 en PySpark (extracto de \texttt{src/transformaciones\_spark.py}).},label={lst:sparkT4}]
+duracion_minutos = _duracion_en_minutos("hora_inicio", "hora_fin")
+antelacion_dias = F.datediff(fecha_reserva, fecha_creacion)
+
+ocupacion_por_cien = F.col("numero_participantes") * F.lit(100)
+bono_ocupacion = (
+    F.when(ocupacion_por_cien >= F.col("capacidad") * F.lit(90), F.lit(1000))
+    .when(ocupacion_por_cien >= F.col("capacidad") * F.lit(75), F.lit(500))
+    .otherwise(F.lit(0)))
+bono_antelacion = F.when(antelacion_dias <= F.lit(7), F.lit(300)).otherwise(F.lit(0))
+bono_fin_semana = F.when(
+    F.dayofweek(fecha_reserva).isin(1, 7), F.lit(200)).otherwise(F.lit(0))
+bono_aprobada = F.when(
+    F.col("estado") == F.lit("APROBADA"), F.lit(100)).otherwise(F.lit(0))
+
+puntaje = (F.col("numero_participantes") * duracion_minutos
+           + bono_ocupacion + bono_antelacion
+           + bono_fin_semana + bono_aprobada).cast("long")
+return solicitudes_con_laboratorio.withColumn("puntaje_prioridad", puntaje)
+\end{lstlisting}
+
+\subsection{Protocolo de medici\'on}
+\label{sec:protocolo}
+Todas las mediciones emplearon \texttt{time.perf\_counter()}, el reloj
+monot\'onico de mayor resoluci\'on disponible en Python, con precisi\'on de
+microsegundos. Para cada transformaci\'on y configuraci\'on se ejecut\'o
+primero una \emph{ejecuci\'on de calentamiento}, cuyo tiempo se registr\'o pero
+\textbf{se descart\'o expl\'icitamente} del c\'alculo, con el fin de absorber
+efectos de compilaci\'on JIT de la JVM, poblado de cach\'es y primera
+materializaci\'on de planes; a continuaci\'on se realizaron \textbf{cinco
+repeticiones medidas}, reportando la \textbf{mediana} como estad\'istico
+central por su robustez frente a valores at\'ipicos. El
+Listado~\ref{lst:medicion} muestra el n\'ucleo del protocolo. Los sesenta
+tiempos crudos (cinco repeticiones por cada una de las doce series
+motor--transformaci\'on--configuraci\'on) se publican en
+\texttt{resultados/tiempos\_crudos.csv}, y las medianas y speedups en
+\texttt{resultados/tiempos\_resumen.csv}, lo que permite reconstruir cada cifra
+de este informe.
+
+\begin{lstlisting}[caption={N\'ucleo del protocolo de medici\'on: calentamiento descartado, cinco repeticiones y mediana (extracto de \texttt{src/medicion.py}).},label={lst:medicion}]
+# Calentamiento: se ejecuta, se registra y se DESCARTA del calculo
+inicio_calentamiento = time.perf_counter()
+resultado_calentamiento = operacion()
+materializar(resultado_calentamiento)   # accion count() en PySpark
+tiempo_calentamiento = time.perf_counter() - inicio_calentamiento
+registro_calentamientos.append(...)
+del resultado_calentamiento
+
+# Cinco repeticiones medidas
+for repeticion in range(1, repeticiones + 1):
+    inicio = time.perf_counter()
+    resultado = operacion()
+    materializar(resultado)
+    tiempo_segundos = time.perf_counter() - inicio
+    mediciones.append(Medicion(..., tiempo_segundos))
+
+# Estadistico central: mediana de las repeticiones homogeneas
+mediana_segundos = statistics.median(tiempos)
+\end{lstlisting}
+
+La elecci\'on de \texttt{time.perf\_counter()} frente a otros relojes de la
+biblioteca est\'andar responde a sus propiedades: es monot\'onico, por lo que
+no le afectan los ajustes del reloj del sistema durante la medici\'on, y ofrece
+la mayor resoluci\'on disponible en la plataforma. La elecci\'on de la mediana
+frente a la media responde a la naturaleza de las perturbaciones: los valores
+at\'ipicos de una serie de medici\'on en un sistema con recolector de basura,
+JIT y procesos concurrentes son casi siempre unilaterales hacia arriba, y la
+media los propaga mientras que la mediana los descarta. Ambas decisiones,
+junto con el calentamiento descartado y la ejecuci\'on independiente de cada
+transformaci\'on, conforman el protocolo \'unico aplicado id\'enticamente a los
+dos motores, condici\'on necesaria para que los speedups sean comparables.
+
+\subsection{Verificaci\'on de equivalencia de resultados}
+\label{sec:equivalencia}
+La comparaci\'on de tiempos solo es v\'alida si ambos motores computan el mismo
+resultado. La equivalencia pandas/PySpark se verific\'o para las cinco
+transformaciones mediante comparaci\'on de cardinalidad y de agregados de
+control (sumas, promedios y conteos por clave). Los agregados de control se
+eligieron por transformaci\'on: para T1, el conteo de filas filtradas y la suma
+de participantes seleccionados; para T2, la igualdad exacta de las 40 filas
+agregadas; para T3, la cardinalidad del join y los conteos por
+\texttt{laboratorio\_id}; para T4, la suma total de
+\texttt{puntaje\_prioridad}, sensible a cualquier divergencia en fechas,
+duraciones o bonos; y para T5, la identidad ordenada de los 20 registros. La Tabla~\ref{tab:equivalencia}
+resume la verificaci\'on: las cardinalidades coinciden exactamente en los cinco
+casos, los agregados por \texttt{laboratorio\_id} de T2 son id\'enticos en las
+40 claves, la suma de \texttt{puntaje\_prioridad} de T4 coincide entre motores
+y los 20 registros de T5 son los mismos y en el mismo orden.
+
+\begin{table}[!t]
+\centering
+\caption{Verificaci\'on de equivalencia pandas/PySpark por transformaci\'on.}
+\label{tab:equivalencia}
+\footnotesize
+\begin{tabular}{@{}lS[table-format=6.0]S[table-format=6.0]l@{}}
+\toprule
+\textbf{Transf.} & {\textbf{Card. pandas}} & {\textbf{Card. PySpark}} & \textbf{Agregados}\\
+\midrule
+T1 & 33117  & 33117  & Id\'enticos\\
+T2 & 40     & 40     & Id\'enticos\\
+T3 & 500000 & 500000 & Id\'enticos\\
+T4 & 500000 & 500000 & Id\'enticos\\
+T5 & 20     & 20     & Id\'enticos\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Repositorio y reproducibilidad de extremo a extremo}
+\label{sec:repositorio}
+Todo el trabajo reside en el repositorio p\'ublico
+\texttt{pe-u4-spark-equipo-c}, cuya estructura sigue exactamente la exigida por
+la gu\'ia: \texttt{notebooks/} con el notebook ejecutado y su exportaci\'on
+HTML; \texttt{src/} con los m\'odulos de transformaciones, medici\'on,
+gr\'aficas y generaci\'on del conjunto de datos; \texttt{data/} con la
+documentaci\'on del conjunto y las salidas persistidas de cada motor;
+\texttt{resultados/} con los tiempos crudos, el resumen de medianas y las
+figuras a \num{300} DPI; \texttt{evidencia/} con las capturas de la Spark UI y
+del master del cl\'uster; y \texttt{docs/} con este documento fuente, su PDF
+compilado y la bibliograf\'ia. El \texttt{README.md} documenta las
+instrucciones exactas de reproducci\'on: creaci\'on del entorno con las
+versiones fijadas de \texttt{requirements.txt}, regeneraci\'on del conjunto con
+su semilla declarada, arranque del master y el worker Standalone, ejecuci\'on
+del protocolo de medici\'on, generaci\'on de las figuras y compilaci\'on del
+informe con la secuencia \texttt{pdflatex} $\rightarrow$ \texttt{biber}
+$\rightarrow$ \texttt{pdflatex} $\rightarrow$ \texttt{pdflatex}. La
+reproducibilidad es de extremo a extremo en el sentido fuerte: cualquier
+revisor puede regenerar el insumo bit a bit (huellas SHA-256 id\'enticas),
+reejecutar las doce series de medici\'on y reconstruir cada cifra de este
+informe desde \texttt{resultados/tiempos\_crudos.csv}, requisito que responde
+directamente a las debilidades de trazabilidad se\~naladas en la evaluaci\'on
+de la pr\'actica anterior de la asignatura.
+
+\section{Resultados}
+\label{sec:resultados}
+
+\subsection{Tiempos medidos y speedup por transformaci\'on}
+\label{sec:tiempos}
+La Tabla~\ref{tab:tiempos} presenta las medianas de las cinco repeticiones por
+transformaci\'on para pandas y para PySpark con cuatro executors, junto con el
+speedup $S = T_{\text{pandas}} / T_{\text{spark}}$ y su interpretaci\'on. El
+patr\'on es n\'itido: PySpark solo supera a pandas en T4
+($S = \num{1.2519}$) y T5 ($S = \num{1.1244}$), las dos transformaciones con
+mayor c\'omputo por registro (evaluaci\'on de la expresi\'on de puntaje sobre
+\num{500000} filas y ordenamiento global, respectivamente). En T1, T2 y T3 el
+speedup es inferior a la unidad, con el caso extremo de T2
+($S = \num{0.1704}$): una agregaci\'on sobre solo 40 grupos cuyo c\'omputo
+\'util es m\'inimo, de modo que el tiempo de PySpark queda dominado por la
+sobrecarga fija de planificaci\'on de tareas y shuffle.
+
+\begin{table*}[!t]
+\centering
+\caption{Medianas de cinco repeticiones por transformaci\'on (calentamiento descartado) y speedup pandas frente a PySpark con 4 executors.}
+\label{tab:tiempos}
+\footnotesize
+\begin{tabular}{@{}lS[table-format=1.4]S[table-format=1.4]S[table-format=1.4]l@{}}
+\toprule
+\textbf{Transformaci\'on} & {$T_{\text{pandas}}$ (\si{\second})} & {$T_{\text{spark}}$ (\si{\second})} & {\textbf{Speedup} $S$} & \textbf{Interpretaci\'on}\\
+\midrule
+T1 Filtrado compuesto      & 0.2119 & 0.3457 & 0.6131 & Sobrecarga de tareas supera al c\'omputo del filtro\\
+T2 Agrupaci\'on (3 agreg.) & 0.1171 & 0.6875 & 0.1704 & Shuffle domina; solo 40 grupos de salida\\
+T3 Join N:1                & 0.2889 & 0.8657 & 0.3337 & Join con shuffle penalizado a este volumen\\
+T4 Columna derivada        & 2.2659 & 1.8100 & 1.2519 & C\'omputo por fila costoso: el paralelismo compensa\\
+T5 Ordenamiento y top-20   & 1.5252 & 1.3565 & 1.1244 & Ordenamiento distribuido ligeramente favorable\\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+La interpretaci\'on por transformaci\'on precisa el mecanismo en cada caso. En
+\textbf{T1}, un filtro con selecci\'on es una transformaci\'on estrecha sin
+shuffle; aun as\'i PySpark tarda \SI{0.3457}{\second} frente a
+\SI{0.2119}{\second} de pandas, porque el costo de planificar y despachar las
+tasks a executors remotos y de recolectar el conteo supera al c\'omputo del
+predicado sobre \num{500000} filas, que pandas resuelve vectorizado en un solo
+espacio de direcciones. En \textbf{T2}, la agrupaci\'on es ancha: exige un
+shuffle completo para reunir cada \texttt{laboratorio\_id} en una partici\'on,
+y como solo existen 40 claves el c\'omputo \'util posterior es despreciable; el
+resultado es el peor speedup del experimento (\num{0.1704}), con casi todo el
+tiempo de PySpark imputable a la maquinaria y no al dato. En \textbf{T3}, el
+join tambi\'en es ancho a este tama\~no de configuraci\'on, y aunque la
+dimensi\'on de 40 laboratorios es min\'uscula, el movimiento de las
+\num{500000} filas de hechos por la red de shuffle domina el costo. En
+\textbf{T4}, en cambio, la columna derivada es estrecha y computacionalmente
+densa (conversiones temporales, cuatro bonos condicionales y un producto por
+fila), y es la \'unica transformaci\'on en la que pandas supera los dos
+segundos; repartir ese c\'omputo entre cuatro executors compensa la sobrecarga
+y produce el mejor speedup (\num{1.2519}). En \textbf{T5}, el ordenamiento
+global es ancho pero el c\'omputo de comparaci\'on por fila es suficientemente
+costoso para que el ordenamiento parcial paralelo por partici\'on, seguido de
+la fusi\'on del top-20, supere ligeramente al ordenamiento estable
+monoproceso de pandas (\num{1.1244}).
+
+Respecto de la dispersi\'on, los tiempos crudos publicados en
+\texttt{resultados/tiempos\_crudos.csv} muestran repeticiones estables: por
+ejemplo, las cinco repeticiones de T1 en pandas oscilaron entre
+\SI{0.1884}{\second} y \SI{0.2539}{\second}, y las de T3 con dos executors
+entre \SI{0.6554}{\second} y \SI{0.9333}{\second}; en todas las series la
+primera repetici\'on medida tendi\'o a ser de las m\'as lentas, lo que confirma
+la pertinencia de haber descartado adem\'as una ejecuci\'on de calentamiento
+previa. El uso de la mediana como estad\'istico central neutraliza los valores
+extremos residuales de cada serie.
+
+La Fig.~\ref{fig:barras} contrasta gr\'aficamente ambos motores. Su lectura
+interpretativa es directa: las barras de PySpark superan a las de pandas
+precisamente en las transformaciones baratas por registro (T1--T3), donde el
+costo fijo del motor no se amortiza, y quedan por debajo en las costosas
+(T4--T5). Este comportamiento es coherente con la caracterizaci\'on emp\'irica
+de la literatura, seg\'un la cual la ventaja de Spark se manifiesta cuando el
+c\'omputo \'util por partici\'on excede con holgura la sobrecarga de
+coordinaci\'on \cite{ahmed2020}, \cite{zaharia2016}.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{fig1_barras.png}
+\caption{Tiempos medianos de pandas frente a PySpark (4 executors) por
+transformaci\'on. Generada con matplotlib a \num{300} DPI por
+\texttt{src/graficas.py}.}
+\label{fig:barras}
+\end{figure}
+
+\subsection{Escalabilidad de T3 y fracci\'on serial observada}
+\label{sec:escalabilidad}
+Para habilitar el an\'alisis de Amdahl, T3 se midi\'o con 1, 2 y 4 executors.
+La Tabla~\ref{tab:escalado} resume las medianas, el speedup experimental
+respecto de la configuraci\'on con un executor,
+$S(N) = T_{\text{spark},1} / T_{\text{spark},N}$, y la eficiencia
+seg\'un \eqref{eq:eficiencia}.
+
+\begin{table}[!t]
+\centering
+\caption{Escalado de T3 (join) con 1, 2 y 4 executors: mediana, speedup experimental respecto de $N=1$ y eficiencia seg\'un \eqref{eq:eficiencia}.}
+\label{tab:escalado}
+\footnotesize
+\begin{tabular}{@{}S[table-format=1.0]S[table-format=1.4]S[table-format=1.4]S[table-format=3.2]@{}}
+\toprule
+{$N$} & {$T_{N}$ (\si{\second})} & {$S(N)$} & {$E(N)$ (\si{\percent})}\\
+\midrule
+1 & 1.3615 & 1.0000 & 100.00\\
+2 & 0.7085 & 1.9217 & 96.08\\
+4 & 0.8657 & 1.5727 & 39.32\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El trabajo matem\'atico se desarrolla de forma expl\'icita. Con $N = 2$:
+\begin{equation}
+S(2) \;=\; \frac{T_{\text{spark},1}}{T_{\text{spark},2}}
+\;=\; \frac{\num{1.3615}}{\num{0.7085}} \;=\; \num{1.9217},
