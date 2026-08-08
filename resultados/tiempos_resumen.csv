@@ -1,0 +1,13 @@
+motor,transformacion,configuracion,repeticiones,mediana_segundos,speedup
+pandas,T1,pandas,5,0.211943500,
+pandas,T2,pandas,5,0.117135000,
+pandas,T3,pandas,5,0.288858300,
+pandas,T4,pandas,5,2.265858700,
+pandas,T5,pandas,5,1.525212900,
+pyspark,T1,executors[4],5,0.345663900,0.613149073
+pyspark,T2,executors[4],5,0.687490800,0.170380462
+pyspark,T3,executors[1],5,1.361502900,0.212161355
+pyspark,T3,executors[2],5,0.708496300,0.407706152
+pyspark,T3,executors[4],5,0.865736300,0.333656218
+pyspark,T4,executors[4],5,1.810005300,1.251851970
+pyspark,T5,executors[4],5,1.356484800,1.124386281

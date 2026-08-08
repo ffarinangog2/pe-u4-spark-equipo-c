@@ -1,0 +1,23 @@
+tipo_metrica,transformacion,configuracion_n,valor,unidad_interpretacion
+speedup_pandas_pyspark,T1,executors[4],0.613149073,"razon; >1 PySpark mas rapido, <1 pandas mas rapido"
+speedup_pandas_pyspark,T2,executors[4],0.170380462,"razon; >1 PySpark mas rapido, <1 pandas mas rapido"
+speedup_pandas_pyspark,T3,executors[4],0.333656218,"razon; >1 PySpark mas rapido, <1 pandas mas rapido"
+speedup_pandas_pyspark,T4,executors[4],1.251851970,"razon; >1 PySpark mas rapido, <1 pandas mas rapido"
+speedup_pandas_pyspark,T5,executors[4],1.124386281,"razon; >1 PySpark mas rapido, <1 pandas mas rapido"
+speedup_experimental_t3,T3,executors[1],1.000000000,razon respecto de executors[1]
+eficiencia_paralela_t3,T3,executors[1],1.000000000,proporcion S(N)/N
+eficiencia_porcentaje_t3,T3,executors[1],100.000000000,porcentaje
+speedup_experimental_t3,T3,executors[2],1.921679619,razon respecto de executors[1]
+eficiencia_paralela_t3,T3,executors[2],0.960839810,proporcion S(N)/N
+eficiencia_porcentaje_t3,T3,executors[2],96.083980961,porcentaje
+speedup_experimental_t3,T3,executors[4],1.572653128,razon respecto de executors[1]
+eficiencia_paralela_t3,T3,executors[4],0.393163282,proporcion S(N)/N
+eficiencia_porcentaje_t3,T3,executors[4],39.316328194,porcentaje
+fraccion_serial_observada,T3,N=4_vs_N=1,0.514490837,proporcion no escalable observada; incluye overhead de Spark
+speedup_teorico_amdahl,T3,N=1,1.000000000,razon teorica
+speedup_gustafson,T3,N=1,1.000000000,razon escalada
+speedup_teorico_amdahl,T3,N=2,1.320575834,razon teorica
+speedup_gustafson,T3,N=2,1.485509163,razon escalada
+speedup_teorico_amdahl,T3,N=4,1.572653128,razon teorica
+speedup_gustafson,T3,N=4,2.456527489,razon escalada
+limite_maximo_amdahl,T3,N=infinito,1.943669212,razon teorica maxima
