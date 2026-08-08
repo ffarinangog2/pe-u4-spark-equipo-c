@@ -998,3 +998,503 @@ El trabajo matem\'atico se desarrolla de forma expl\'icita. Con $N = 2$:
 \begin{equation}
 S(2) \;=\; \frac{T_{\text{spark},1}}{T_{\text{spark},2}}
 \;=\; \frac{\num{1.3615}}{\num{0.7085}} \;=\; \num{1.9217},
+\label{eq:s2}
+\end{equation}
+y con $N = 4$:
+\begin{equation}
+S(4) \;=\; \frac{T_{\text{spark},1}}{T_{\text{spark},4}}
+\;=\; \frac{\num{1.3615}}{\num{0.8657}} \;=\; \num{1.5727}.
+\label{eq:s4}
+\end{equation}
+Sustituyendo la medici\'on con $N = 4$ y $S = \num{1.5727}$ en
+\eqref{eq:karpflatt}, la fracci\'on no escalable observada resulta:
+\begin{align}
+f &= \frac{\dfrac{1}{\num{1.5727}} - \dfrac{1}{4}}{1 - \dfrac{1}{4}}
+   = \frac{\num{0.6359} - \num{0.2500}}{\num{0.7500}} \nonumber\\
+  &= \frac{\num{0.3859}}{\num{0.7500}}
+   = \num{0.5145},
+\label{eq:fobs}
+\end{align}
+de donde la fracci\'on paralelizable observada es
+$p = 1 - f = \num{0.4855}$. Aplicando \eqref{eq:smax}, el l\'imite te\'orico
+m\'aximo de speedup para T3, con infinitos executors, es
+\begin{equation}
+S_{\text{m\'ax}} \;=\; \frac{1}{1-p} \;=\; \frac{1}{f}
+\;=\; \frac{1}{\num{0.5145}} \;=\; \num{1.9437}.
+\label{eq:smaxT3}
+\end{equation}
+Con ese valor de $p$, el speedup te\'orico de Amdahl \eqref{eq:amdahl} predice
+\begin{equation}
+S_A(2) = \frac{1}{\num{0.5145} + \dfrac{\num{0.4855}}{2}}
+       = \frac{1}{\num{0.7572}} = \num{1.3206},
+\label{eq:sa2}
+\end{equation}
+mientras que por construcci\'on $S_A(4) = \num{1.5727}$ coincide con el punto
+experimental empleado en \eqref{eq:fobs}. Para el modelo escalado de
+Gustafson-Barsis \eqref{eq:gustafson}:
+\begin{align}
+S_G(2) &= 2 - \num{0.5145}\,(2-1) = \num{1.4855},
+\label{eq:sg2}\\
+S_G(4) &= 4 - \num{0.5145}\,(4-1) = \num{2.4565}.
+\label{eq:sg4}
+\end{align}
+
+La Tabla~\ref{tab:modelos} consolida el contraste entre los dos modelos
+te\'oricos y la medici\'on. La lectura conjunta es reveladora: Amdahl subestima
+el punto $N=2$ y, por construcci\'on, coincide en $N=4$; Gustafson, que
+responde a la pregunta distinta de cu\'anto m\'as trabajo podr\'ia procesarse
+en el mismo tiempo, promete \num{2.4565} con cuatro executors, valor
+inalcanzable en el experimento de talla fija pero indicativo del r\'egimen al
+que el PFC deber\'ia aspirar aumentando el volumen por lote. La no monoton\'ia se aprecia
+tambi\'en en los tiempos absolutos de la Tabla~\ref{tab:escalado}: el m\'inimo
+ocurre en $N=2$ y el tramo de 2 a 4 executors tiene pendiente positiva, es
+decir, a\~nadir recursos encareci\'o el resultado.
+
+\begin{table}[!t]
+\centering
+\caption{Speedup experimental de T3 frente a las predicciones de Amdahl \eqref{eq:amdahl} y Gustafson-Barsis \eqref{eq:gustafson} con $f=\num{0.5145}$.}
+\label{tab:modelos}
+\footnotesize
+\begin{tabular}{@{}S[table-format=1.0]S[table-format=1.4]S[table-format=1.4]S[table-format=1.4]@{}}
+\toprule
+{$N$} & {$S_{\text{exp}}(N)$} & {$S_A(N)$} & {$S_G(N)$}\\
+\midrule
+1 & 1.0000 & 1.0000 & 1.0000\\
+2 & 1.9217 & 1.3206 & 1.4855\\
+4 & 1.5727 & 1.5727 & 2.4565\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+La Fig.~\ref{fig:speedup} superpone el speedup experimental de T3 sobre la
+curva te\'orica de Amdahl con $p = \num{0.4855}$ y su as\'intota
+$S_{\text{m\'ax}} = \num{1.9437}$. Su interpretaci\'on revela el hallazgo
+central del experimento: el punto experimental con $N = 2$
+($S = \num{1.9217}$) queda \emph{por encima} de la predicci\'on de Amdahl
+\eqref{eq:sa2} y pr\'acticamente sobre la as\'intota, mientras que el punto con
+$N = 4$ cae sobre la curva por construcci\'on. Es decir, el escalado real no es
+mon\'otono: pasar de 2 a 4 executors \emph{empeor\'o} el tiempo absoluto
+(\num{0.7085} frente a \SI{0.8657}{\second}). Esta anomal\'ia se discute en la
+Secci\'on~\ref{sec:analisis}.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{fig2_speedup.png}
+\caption{Speedup experimental de T3 frente al n\'umero de executors $N$, con la
+curva te\'orica de Amdahl \eqref{eq:amdahl} para $p = \num{0.4855}$ y la
+as\'intota $S_{\text{m\'ax}} = \num{1.9437}$ de \eqref{eq:smaxT3}
+superpuestas. Generada con matplotlib a \num{300} DPI.}
+\label{fig:speedup}
+\end{figure}
+
+La Fig.~\ref{fig:eficiencia} muestra la eficiencia \eqref{eq:eficiencia} frente
+a $N$. Su lectura interpretativa cuantifica el desperdicio de recursos: con dos
+executors la eficiencia es casi ideal (\SI{96.08}{\percent}: el segundo executor
+aporta pr\'acticamente todo su valor), pero con cuatro cae a
+\SI{39.32}{\percent}, es decir, m\'as del \SI{60}{\percent} de la capacidad
+agregada se consume en sobrecarga de coordinaci\'on en lugar de c\'omputo
+\'util. En t\'erminos de aprovisionamiento en la nube, pagar cuatro executors
+para este volumen equivale a desperdiciar la mayor parte de la factura, en
+l\'inea con la motivaci\'on de los recomendadores de recursos conscientes del
+costo para flujos DAG \cite{asemanmanzar2023}. La Fig.~\ref{fig:gustafson}
+completa el an\'alisis contrastando ambos modelos te\'oricos: la recta de
+Gustafson \eqref{eq:gustafson} crece sin cota porque supone carga creciente,
+mientras que el experimento, de talla fija, sigue el r\'egimen de Amdahl; la
+distancia creciente entre ambas curvas ilustra por qu\'e cada modelo responde a
+una pregunta distinta \cite{gustafson1988}, \cite{karp1990}.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{fig3_eficiencia.png}
+\caption{Eficiencia del paralelismo $E(N) = S(N)/N$ seg\'un
+\eqref{eq:eficiencia} para T3 con 1, 2 y 4 executors. Generada con matplotlib a
+\num{300} DPI.}
+\label{fig:eficiencia}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{06_gustafson_t3.png}
+\caption{Speedup escalado de Gustafson-Barsis \eqref{eq:gustafson} para T3 con
+$f = \num{0.5145}$, contrastado con el r\'egimen de talla fija de Amdahl.
+Generada con matplotlib a \num{300} DPI.}
+\label{fig:gustafson}
+\end{figure}
+
+\subsection{Evidencia de ejecuci\'on: Spark UI}
+\label{sec:evidencia}
+La Fig.~\ref{fig:sparkui} presenta la captura de la interfaz de Spark
+correspondiente al job de T3, en la que se aprecian el DAG del plan f\'isico y
+los stages en que Catalyst y el planificador lo descomponen: un stage de
+lectura y proyecci\'on de cada fuente y el stage delimitado por la frontera de
+shuffle del join, con sus tasks distribuidas entre los executors registrados
+del cl\'uster Standalone. La captura confirma visualmente dos afirmaciones del
+fundamento te\'orico: que el plan ejecutado no coincide literalmente con el
+orden textual del c\'odigo, por la reescritura del optimizador
+\cite{armbrust2015}, y que el shuffle del join es la frontera que parte el
+trabajo en stages \cite{armbrust2015}. El repositorio incluye adem\'as capturas
+del master con el worker y los executors registrados
+(\texttt{evidencia/}), que acreditan que la ejecuci\'on ocurri\'o sobre un
+cl\'uster real y no sobre \texttt{local[N]}.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{spark_ui_t3.jpg}
+\caption{Captura de la Spark UI con el DAG y los stages del job de la
+transformaci\'on T3 (join) sobre el cl\'uster Standalone. Archivo
+\texttt{evidencia/spark\_ui\_t3.jpg} del repositorio.}
+\label{fig:sparkui}
+\end{figure}
+
+\section{An\'alisis cr\'itico}
+\label{sec:analisis}
+
+\subsection{La anomal\'ia $N=2$ frente a $N=4$}
+El resultado m\'as instructivo del experimento es que T3 fue m\'as r\'apida con
+dos executors (\SI{0.7085}{\second}) que con cuatro (\SI{0.8657}{\second}). La
+Ley de Amdahl \eqref{eq:amdahl} es mon\'otona creciente en $N$, de modo que la
+anomal\'ia no la explica el modelo, sino los t\'erminos que el modelo no
+incluye: la sobrecarga dependiente de $N$. Con
+\texttt{spark.sql.shuffle.partitions} $= N$, duplicar los executors duplica las
+particiones de shuffle del join; con \num{500000} filas, las particiones
+resultantes son peque\~nas y el costo por partici\'on (planificaci\'on de la
+task, serializaci\'on, transferencia y apertura de flujos de shuffle) crece
+m\'as de lo que decrece el c\'omputo \'util por partici\'on. En otras palabras,
+la sobrecarga no es constante como supone el modelo simple, sino creciente con
+$N$, y a este volumen su pendiente supera a la ganancia del paralelismo a
+partir de $N = 3$ aproximadamente. Este fen\'omeno est\'a documentado en la
+literatura de benchmarking, donde la ventaja de a\~nadir recursos depende
+cr\'iticamente de la relaci\'on entre volumen de datos y n\'umero de
+particiones \cite{ahmed2020}, y es la raz\'on por la que la m\'etrica de
+Karp-Flatt recomienda examinar la evoluci\'on de $f$ con $N$: si $f$ crece con
+$N$, la p\'erdida de eficiencia se debe a sobrecarga y no a falta de
+paralelismo algor\'itmico \cite{karp1990}. En efecto, aplicando
+\eqref{eq:karpflatt} al punto $N=2$ se obtiene
+$f_2 = (1/\num{1.9217} - 1/2)/(1 - 1/2) = \num{0.0407}$, frente a
+$f_4 = \num{0.5145}$ del punto $N=4$: el crecimiento de $f$ en un orden de
+magnitud al duplicar $N$ es la firma inequ\'ivoca de la sobrecarga creciente
+del motor.
+
+\subsection{Fracci\'on serial algor\'itmica frente a fracci\'on no escalable observada}
+La discrepancia entre $f_2$ y $f_4$ obliga a la distinci\'on conceptual exigida
+por la gu\'ia. La \emph{fracci\'on serial algor\'itmica} de un join
+particionado por clave es intr\'insecamente peque\~na: casi todo el trabajo
+(sondear la tabla dimensional y emitir filas combinadas) es paralelizable por
+partici\'on. La \emph{fracci\'on no escalable observada}
+$f = \num{0.5145}$ de \eqref{eq:fobs} no mide esa propiedad del algoritmo, sino
+el agregado de la porci\'on serial real (driver, planificaci\'on central,
+recolecci\'on del conteo) m\'as toda la sobrecarga distribuida que no se reduce
+al a\~nadir executors \cite{karp1990}. Por eso $S_{\text{m\'ax}} =
+\num{1.9437}$ de \eqref{eq:smaxT3} debe leerse como el l\'imite pr\'actico
+\emph{de esta implementaci\'on a este volumen}, no como una propiedad del join:
+con un conjunto de datos mayor, el c\'omputo \'util crecer\'ia, la sobrecarga
+relativa caer\'ia, $f$ disminuir\'ia y el l\'imite se elevar\'ia, que es
+exactamente el r\'egimen de carga creciente que describe Gustafson
+\eqref{eq:gustafson} \cite{gustafson1988}.
+
+\subsection{Umbral de rentabilidad de Spark en el dominio FUVV}
+La Tabla~\ref{tab:tiempos} permite estimar el umbral a partir del cual Spark es
+rentable en el dominio. La sobrecarga fija observable del motor, tomando T2
+como transformaci\'on de c\'omputo casi nulo, ronda los
+\SI{0.5}{\second}--\SI{0.7}{\second} por acci\'on a este volumen. Para que el
+paralelismo la amortice, el c\'omputo \'util secuencial debe ser un m\'ultiplo
+holgado de esa cifra: en el experimento, solo T4
+($T_{\text{pandas}} = \SI{2.2659}{\second}$) y T5
+(\SI{1.5252}{\second}) la superan, y en efecto son las \'unicas con
+$S > 1$. Extrapolando linealmente los tiempos por registro, las
+transformaciones baratas (T1--T3) requerir\'ian del orden de $5\times$ a
+$20\times$ el volumen actual, es decir, entre 2,5 y 10 millones de solicitudes,
+para que Spark las rentabilice, cifra alcanzable en el dominio FUVV solo al
+consolidar varios per\'iodos acad\'emicos o al incorporar la telemetr\'ia de
+monitoreo por equipo, mucho m\'as voluminosa que las reservas. La conclusi\'on
+operativa para el PFC es un dise\~no h\'ibrido: pandas para los cortes
+anal\'iticos peri\'odicos del volumen actual y Spark reservado para el
+reprocesamiento hist\'orico consolidado y para el flujo de monitoreo, decisi\'on
+alineada con la recomendaci\'on de dimensionar recursos seg\'un el costo y no
+seg\'un el m\'aximo disponible \cite{asemanmanzar2023}, \cite{ahmed2020}.
+
+\subsection{Contraste con la evidencia publicada}
+Los resultados no contradicen la literatura que atribuye a Spark ventajas
+sobre los motores previos: la reconcilian con su dominio de validez. El
+estudio de benchmarking sistem\'atico con HiBench compara Spark contra Hadoop
+sobre conjuntos de datos de decenas y centenas de gigabytes en cl\'usteres de
+varios nodos, r\'egimen en el que el c\'omputo \'util por partici\'on amortiza
+holgadamente la coordinaci\'on \cite{ahmed2020}; nuestro experimento compara
+Spark contra un motor monoproceso vectorizado sobre \num{500000} filas que
+caben en memoria, r\'egimen expl\'icitamente se\~nalado por la propia
+literatura del motor como territorio de las herramientas de un solo nodo
+\cite{zaharia2016}. Que T4 y T5 crucen ya el umbral de rentabilidad a este
+volumen, y que T1--T3 no lo hagan, dibuja emp\'iricamente la frontera entre
+ambos reg\'imenes y confirma la advertencia te\'orica de la unidad: la
+decisi\'on entre procesamiento secuencial y distribuido no es ideol\'ogica
+sino cuantitativa, y debe tomarse midiendo, con protocolo, el caso propio
+\cite{amdahl1967}, \cite{karp1990}.
+
+\subsection{Implicaciones para el despliegue en la nube del PFC}
+Los resultados tienen traducci\'on directa al dimensionamiento en la nube. Si
+el pipeline del sistema de laboratorios se desplegara sobre un servicio
+gestionado (EMR, HDInsight o Dataproc), la curva de eficiencia de la
+Fig.~\ref{fig:eficiencia} ser\'ia literalmente la curva de retorno por
+d\'olar: con el volumen actual, un cl\'uster de dos executors entrega el
+\SI{96}{\percent} de eficiencia y uno de cuatro solo el \SI{39}{\percent}, de
+modo que duplicar el gasto en c\'omputo empeorar\'ia incluso el tiempo
+absoluto. La pol\'itica racional, coherente con la literatura de
+recomendaci\'on de recursos consciente del costo para flujos DAG
+\cite{asemanmanzar2023}, es dimensionar por lote y no por pico: agrupar el
+procesamiento anal\'itico en lotes grandes (consolidando per\'iodos o
+incorporando telemetr\'ia), aprovechar la elasticidad r\'apida de la nube
+\cite{mell2011} para crear el cl\'uster solo durante el lote y destruirlo
+despu\'es, y elegir $N$ con el criterio de eficiencia m\'inima de la
+Secci\'on~\ref{sec:amdahl} en lugar del m\'aximo presupuestable. El
+experimento aporta, adem\'as, el insumo que esa pol\'itica necesita: la
+fracci\'on no escalable medida por transformaci\'on, sin la cual cualquier
+dimensionamiento es conjetura.
+
+\subsection{Amenazas a la validez}
+Tres limitaciones acotan la generalizaci\'on. Primera, el cl\'uster Standalone
+se despleg\'o en una sola m\'aquina f\'isica: los executors son procesos JVM
+independientes, pero comparten CPU, memoria y disco, de modo que la contenci\'on
+local infla la sobrecarga con $N = 4$ frente a un cl\'uster de nodos f\'isicos.
+Segunda, el conjunto de datos, aunque de \num{500000} registros, cabe en la
+memoria de un solo proceso, que es precisamente el reg\'imen donde pandas es
+imbatible; el experimento no observa el r\'egimen en que pandas deja de poder
+ejecutar. Tercera, la mediana de cinco repeticiones es robusta pero no captura
+la varianza entre sesiones del cl\'uster; los tiempos crudos publicados
+permiten a un revisor calcular dispersiones. Cuarta, cada executor se
+configur\'o con un solo n\'ucleo y \SI{512}{\mebi\byte}, valores modestos que
+acotan el paralelismo intra-executor y aumentan la presi\'on de memoria durante
+el shuffle; con executors de varios n\'ucleos la fracci\'on no escalable medida
+ser\'ia previsiblemente menor. Quinta, el conjunto de datos es sint\'etico y
+sus claves de agrupaci\'on est\'an distribuidas de manera aproximadamente
+uniforme entre los 40 laboratorios, de modo que el experimento no observa el
+sesgo de partici\'on (\emph{data skew}) que en cargas reales suele ser la causa
+dominante de p\'erdida de eficiencia en transformaciones anchas.
+
+Ninguna de estas amenazas invalida la comprobaci\'on de la ley: todas afectan
+el valor num\'erico de $f$, no la forma funcional \eqref{eq:amdahl} que el
+experimento confirma. La direcci\'on del sesgo, adem\'as, es conocida y
+consistente: las cinco limitaciones tienden a sobrestimar $f$, por lo que el
+l\'imite $S_{\text{m\'ax}} = \num{1.9437}$ debe leerse como una cota
+conservadora del rendimiento alcanzable en una infraestructura de
+producci\'on.
+
+\section{Preguntas de an\'alisis}
+\label{sec:preguntas}
+
+\subsection{Pregunta 1: speedup te\'orico m\'aximo de T3 y procesadores para el \SI{90}{\percent}}
+Con el valor obtenido en \eqref{eq:fobs}, $f = \num{0.5145}$ y
+$p = \num{0.4855}$, el speedup te\'orico m\'aximo para $N \to \infty$ ya se
+calcul\'o en \eqref{eq:smaxT3}: $S_{\text{m\'ax}} = 1/f = \num{1.9437}$. El
+\SI{90}{\percent} de ese m\'aximo es
+$S_{90} = 0{,}9 \times \num{1.9437} = \num{1.7493}$. Para hallar el n\'umero de
+procesadores que lo alcanza se iguala \eqref{eq:amdahl} a $S_{90}$ y se
+despeja $N$:
+\begin{equation}
+\frac{1}{f + \dfrac{p}{N}} = S_{90}
+\;\Longrightarrow\;
+N = \frac{p}{\dfrac{1}{S_{90}} - f}.
+\label{eq:n90}
+\end{equation}
+Sustituyendo num\'ericamente:
+\begin{equation}
+N = \frac{\num{0.4855}}{\dfrac{1}{\num{1.7493}} - \num{0.5145}}
+  = \frac{\num{0.4855}}{\num{0.5717} - \num{0.5145}}
+  = \frac{\num{0.4855}}{\num{0.0572}}
+  = \num{8.49}.
+\label{eq:n90num}
+\end{equation}
+Como $N$ debe ser entero, se requieren \textbf{9 procesadores}. La
+comprobaci\'on con \eqref{eq:amdahl} lo confirma:
+$S(9) = 1/(\num{0.5145} + \num{0.4855}/9) = 1/\num{0.5684} = \num{1.7592}$, que
+es el \SI{90.5}{\percent} de $S_{\text{m\'ax}}$, mientras que
+$S(8) = 1/(\num{0.5145} + \num{0.4855}/8) = 1/\num{0.5752} = \num{1.7386}$
+alcanza solo el \SI{89.4}{\percent}. El resultado es pedag\'ogicamente
+elocuente: nueve procesadores para no llegar siquiera a duplicar el
+rendimiento. Es la manifestaci\'on num\'erica del argumento original de Amdahl
+sobre los rendimientos decrecientes del paralelismo cuando la fracci\'on serial
+es alta \cite{amdahl1967}, y del uso diagn\'ostico de la fracci\'on serial
+experimental que proponen Karp y Flatt: cuando $f$ supera $0{,}5$, invertir en
+m\'as procesadores es econ\'omicamente indefendible y el esfuerzo debe
+dirigirse a reducir la sobrecarga, no a escalar \cite{karp1990}. Para el
+dominio FUVV, la implicaci\'on directa es que el join de solicitudes con
+laboratorios no justifica, al volumen actual, m\'as de dos executors, y que
+todo presupuesto adicional rendir\'ia m\'as invertido en aumentar el volumen
+procesado por lote, r\'egimen en el que gobierna Gustafson
+\cite{gustafson1988}.
+
+\subsection{Pregunta 2: speedup menor que 1, sobrecarga de Spark y tama\~no m\'inimo del conjunto}
+Tres de las cinco transformaciones (T1, T2 y T3) presentaron speedup inferior a
+la unidad, con PySpark hasta seis veces m\'as lento que pandas en T2. La causa
+no es un defecto de implementaci\'on, verificada como equivalente en la
+Tabla~\ref{tab:equivalencia}, sino la estructura de costos del motor
+distribuido. Cada acci\'on de Spark paga una sobrecarga que pandas no tiene:
+construcci\'on y optimizaci\'on del plan por Catalyst \cite{armbrust2015},
+planificaci\'on y despacho de tasks a executors remotos, serializaci\'on y
+deserializaci\'on de datos entre JVM y, en las transformaciones anchas como la
+agrupaci\'on de T2 y el join de T3, el shuffle completo con escritura y lectura
+de bloques intermedios \cite{armbrust2015}, \cite{zaharia2016}. En el
+experimento esa sobrecarga se cuantifica directamente: T2 computa tres
+agregados sobre apenas 40 grupos, un trabajo que pandas resuelve en
+\SI{0.1171}{\second}, mientras PySpark tarda \SI{0.6875}{\second}; la
+diferencia, del orden de \SI{0.5}{\second}--\SI{0.6}{\second}, es
+esencialmente sobrecarga pura de planificaci\'on y shuffle a este volumen. El
+tama\~no m\'inimo que justifica Spark en el dominio FUVV se estima exigiendo
+que el c\'omputo \'util secuencial supere con holgura esa sobrecarga
+multiplicada por el factor de amortizaci\'on deseado: extrapolando los tiempos
+por registro medidos, las transformaciones baratas necesitar\'ian entre 2,5 y
+10 millones de registros, volumen que en el PFC solo se alcanza consolidando
+varios per\'iodos acad\'emicos o incorporando la telemetr\'ia de monitoreo por
+equipo. Esta estimaci\'on coincide con la evidencia emp\'irica publicada, que
+sit\'ua la ventaja de Spark en reg\'imenes donde el volumen por partici\'on
+mantiene ocupados los executors \cite{ahmed2020}, y con la advertencia general
+de que los datos peque\~nos pertenecen a herramientas de un solo nodo
+\cite{armbrust2015}.
+
+\subsection{Pregunta 3: pipeline del PFC con Spark Structured Streaming}
+Si las solicitudes de reserva y los eventos de monitoreo del sistema FUVV
+llegaran en tiempo real, el pipeline se reimplementar\'ia sobre Spark
+Structured Streaming siguiendo una arquitectura Kappa \cite{armbrust2018},
+\cite{armbrust2010}. Como \emph{fuentes}, cada microservicio del sistema
+publicar\'ia sus eventos (solicitud creada, aprobada, cancelada; equipo
+encendido, incidencia) en t\'opicos de un log distribuido tipo Kafka,
+particionados por \texttt{laboratorio\_id} para preservar el orden por
+laboratorio; el job de streaming leer\'ia esos t\'opicos como DataFrames
+ilimitados. Las transformaciones T1--T5 se trasladan casi literalmente gracias
+a que la API de DataFrames unifica lote y flujo \cite{armbrust2015},
+\cite{zaharia2016}: T1 es un filtro sin estado; T2 se convierte en agregaciones
+por ventanas de tiempo deslizantes por laboratorio con \emph{watermark} para
+acotar el estado y tolerar eventos tard\'ios; T3 es un \emph{stream-static
+join} contra la dimensi\'on de laboratorios, peque\~na y difundida a los
+executors; T4 sigue siendo una columna derivada sin estado; y T5 se materializa
+como vista de ranking actualizada por ventana. Como \emph{sinks}, los agregados
+de demanda y el ranking se escribir\'ian en la base operacional del dashboard
+mediante \texttt{foreachBatch}, y el hist\'orico crudo en almacenamiento
+columnar para reprocesamiento. La \emph{pol\'itica de triggers} ser\'ia de
+micro-lotes por tiempo de procesamiento (por ejemplo, cada 30 segundos), plazo
+sobrado para un tablero administrativo y que reduce la sobrecarga por lote que
+este mismo experimento cuantific\'o. Las \emph{garant\'ias de entrega} ser\'ian
+exactamente-una-vez de extremo a extremo, combinando fuentes reproducibles por
+offset, checkpointing del estado y del progreso en almacenamiento confiable, y
+sinks idempotentes o transaccionales \cite{armbrust2018}, \cite{zaharia2016};
+donde el sink solo admita al-menos-una-vez, la idempotencia por clave de
+solicitud preservar\'ia la correcci\'on.
+
+\subsection{Pregunta 4: eficiencia de Spark frente a MapReduce en procesamiento iterativo}
+La ventaja de Spark sobre MapReduce en cargas iterativas se explica por la
+conjunci\'on de dos mecanismos: el \emph{lineage} de los RDD y la
+\emph{evaluaci\'on perezosa}. En MapReduce, cada iteraci\'on de un algoritmo es
+un trabajo independiente que lee su entrada de HDFS y escribe su salida en
+HDFS, con replicaci\'on incluida; la tolerancia a fallos se compra con
+materializaci\'on a disco en cada frontera, de modo que un algoritmo de $k$
+iteraciones paga $k$ ciclos completos de E/S distribuida \cite{dean2008},
+\cite{shvachko2010}. El RDD invierte ese compromiso: los datos de trabajo
+permanecen en la memoria de los executors entre iteraciones, y la tolerancia a
+fallos no requiere replicarlos porque cada RDD registra su lineage, el grafo de
+transformaciones gruesas que lo produjo; si se pierde una partici\'on, el motor
+la reconstruye reaplicando ese linaje solo sobre los datos necesarios, un costo
+que se paga \'unicamente ante el fallo y no en cada iteraci\'on
+\cite{zaharia2016}. La evaluaci\'on perezosa complementa el mecanismo: al no
+ejecutar nada hasta la acci\'on, Spark acumula la cadena completa de
+transformaciones de la iteraci\'on y la compila en un DAG de stages que
+encadena operaciones estrechas dentro de un mismo stage sin materializar
+intermedios, dejando el shuffle solo donde es sem\'anticamente inevitable
+\cite{zaharia2016}, \cite{armbrust2015}; sobre DataFrames, Catalyst adem\'as
+reescribe el plan global antes de generarlo f\'isicamente \cite{armbrust2015}.
+El resultado, validado emp\'iricamente por estudios de benchmarking
+sistem\'atico con ventajas especialmente amplias en cargas iterativas de
+aprendizaje autom\'atico \cite{ahmed2020}, es que el costo por iteraci\'on de
+Spark se reduce al c\'omputo m\'as el shuffle estrictamente necesario, mientras
+que el de MapReduce incluye siempre la materializaci\'on replicada a disco.
+Nuestro propio experimento ofrece la contracara pedag\'ogica: en trabajos de
+una sola pasada y volumen modesto, esas mismas ventajas no alcanzan a
+amortizar la sobrecarga fija del motor.
+
+\section{Conclusiones individuales}
+\label{sec:conclusiones}
+
+Como s\'intesis grupal previa a las conclusiones individuales, el equipo
+considera comprobada experimentalmente la Ley de Amdahl en su doble
+dimensi\'on: como forma funcional, porque el speedup medido de T3 satura en
+lugar de crecer linealmente con los executors, y como herramienta de
+ingenier\'ia, porque su forma inversa permiti\'o cuantificar en
+$f = \num{0.5145}$ la fracci\'on no escalable de la implementaci\'on y en
+$S_{\text{m\'ax}} = \num{1.9437}$ su l\'imite pr\'actico. El hallazgo no
+previsto, el mejor rendimiento con dos executors que con cuatro, result\'o ser
+el m\'as valioso pedag\'ogicamente, porque oblig\'o a distinguir entre el
+modelo y los t\'erminos de sobrecarga que el modelo omite, y a usar la
+m\'etrica de Karp-Flatt como diagn\'ostico y no solo como f\'ormula. A
+continuaci\'on, cada integrante presenta su conclusi\'on individual.
+
+\subsection{Freddy Farinango}
+Coordinar esta pr\'actica y levantar el cl\'uster Spark Standalone real me
+dej\'o un aprendizaje t\'ecnico que ning\'un ejercicio con \texttt{local[N]}
+habr\'ia producido: la diferencia entre simular paralelismo e instrumentarlo.
+Exigir mediante el StatusTracker que los executors estuvieran registrados antes
+de medir, fijar las particiones de shuffle al n\'umero de executors y verificar
+que el master no degradara a modo local convirtieron la configuraci\'on del
+motor en parte del experimento y no en un tr\'amite. El resultado que m\'as me
+hizo pensar fue la anomal\'ia de T3: dos executors rindieron m\'as que cuatro,
+y la fracci\'on de Karp-Flatt salt\'o de \num{0.0407} a \num{0.5145} al
+duplicar $N$, evidencia num\'erica de que la sobrecarga del motor crece con los
+recursos. Para el PFC de laboratorios inform\'aticos, del que provengo, la
+lecci\'on es directa: nuestro sistema de reservas no debe adoptar Spark por
+moda, sino cuando el volumen consolidado de telemetr\'ia lo amortice, y
+cualquier decisi\'on de aprovisionamiento debe partir de una medici\'on con
+protocolo, calentamiento descartado y mediana, como la que aqu\'i construimos.
+
+\subsection{Jeremy Gaibor}
+Implementar dos veces las mismas cinco transformaciones, primero en pandas y
+luego en PySpark, me ense\~n\'o que la equivalencia sem\'antica entre motores
+es un problema de ingenier\'ia en s\'i mismo. Detalles que parec\'ian menores
+decid\'ian la validez del experimento: reproducir en Spark la normalizaci\'on
+UTC de fechas de pandas extrayendo la subcadena ISO para que el bono de
+anticipaci\'on de T4 coincidiera, recordar que \texttt{dayofweek} numera el
+domingo como 1 en Spark y como 6 en pandas, y garantizar el desempate estable
+del top-20 con cuatro claves de ordenaci\'on. Sin la verificaci\'on de
+cardinalidades y agregados de control, cualquier speedup habr\'ia sido ruido.
+Tambi\'en interioric\'e el peso de la evaluaci\'on perezosa: hasta que no
+forzamos la acci\'on \texttt{count()}, los tiempos de PySpark med\'ian la
+construcci\'on del plan y no su ejecuci\'on, un error que habr\'ia inflado
+artificialmente al motor distribuido. Aplicado al dominio FUVV, concluyo que
+el puntaje de prioridad de T4, la \'unica transformaci\'on donde Spark gan\'o
+con claridad, es exactamente el tipo de c\'omputo por registro que
+justificar\'ia distribuir el pipeline cuando el sistema crezca.
+
+\subsection{Iv\'an Villamar\'in}
+Mi rol de an\'alisis cuantitativo me oblig\'o a usar las ecuaciones de la
+unidad como herramientas y no como f\'ormulas de examen, y ah\'i estuvo mi
+mayor aprendizaje t\'ecnico. Sustituir las medianas reales en la forma inversa
+de Amdahl y obtener $f = \num{0.5145}$ me pareci\'o primero un fracaso del
+experimento, hasta comprender la advertencia metodol\'ogica de la gu\'ia: esa
+cifra no es la fracci\'on serial del algoritmo de join, sino la fracci\'on no
+escalable observada, que arrastra toda la sobrecarga de planificaci\'on y
+shuffle del motor. Distinguirlas cambia la conclusi\'on por completo: el
+l\'imite $S_{\text{m\'ax}} = \num{1.9437}$ describe esta implementaci\'on a
+este volumen, no el potencial del join. Calcular que se necesitar\'ian nueve
+procesadores para rozar el \SI{90}{\percent} de ese l\'imite, y contrastarlo
+con la recta de Gustafson que promete \num{2.4565} con solo cuatro si la carga
+creciera, me dej\'o clara la pregunta correcta para el PFC de referencia: no
+cu\'antos executors comprar, sino cu\'anto volumen procesar por lote para que
+los executors que ya tenemos trabajen con eficiencia superior al
+\SI{90}{\percent}, como ocurri\'o con $N=2$.
+
+\section*{Declaraci\'on de uso de inteligencia artificial generativa}
+En cumplimiento de los lineamientos de la asignatura, el equipo declara el uso
+de la herramienta \textbf{Claude (Anthropic)} con el siguiente prop\'osito:
+asistencia en la redacci\'on, estructuraci\'on y formato \LaTeX{} de este
+informe (portada, secciones, tablas \texttt{booktabs}, entornos de ecuaciones y
+gesti\'on bibliogr\'afica con \texttt{biblatex}), a partir de los resultados,
+c\'odigo y mediciones producidos por el equipo. Las secciones asistidas fueron
+la redacci\'on del fundamento te\'orico, la organizaci\'on del procedimiento y
+del an\'alisis, y la composici\'on tipogr\'afica del documento. El dise\~no del
+experimento, la implementaci\'on de las transformaciones, la ejecuci\'on de las
+mediciones sobre el cl\'uster, los datos, las figuras y los c\'alculos
+num\'ericos son obra del equipo y fueron verificados contra los archivos del
+repositorio (\texttt{resultados/tiempos\_crudos.csv},
+\texttt{resultados/tiempos\_resumen.csv} y
+\texttt{resultados/metricas\_derivadas.csv}).
+
+\printbibliography[title={Referencias}]
+
+\end{document}
