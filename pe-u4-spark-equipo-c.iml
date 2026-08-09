@@ -5,7 +5,7 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="~\Downloads\proyecto_mesa_ayuda_jms\pe-u4-spark-equipo-c\.venv" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="~\Desktop\Grupal\pe-u4-spark-equipo-c\.venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
