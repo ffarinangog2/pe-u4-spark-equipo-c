@@ -59,3 +59,13 @@ pyspark,T3,executors[2],2,0.655432600
 pyspark,T3,executors[2],3,0.704658200
 pyspark,T3,executors[2],4,0.708496300
 pyspark,T3,executors[2],5,0.787001000
+pyspark,T5,executors[1],1,1.452706700
+pyspark,T5,executors[1],2,1.591153100
+pyspark,T5,executors[1],3,1.507588400
+pyspark,T5,executors[1],4,1.584563000
+pyspark,T5,executors[1],5,1.563247100
+pyspark,T5,executors[2],1,1.629179400
+pyspark,T5,executors[2],2,1.173254300
+pyspark,T5,executors[2],3,1.003831600
+pyspark,T5,executors[2],4,1.021736700
+pyspark,T5,executors[2],5,1.203588800
