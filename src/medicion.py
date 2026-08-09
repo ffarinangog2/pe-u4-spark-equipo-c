@@ -437,10 +437,13 @@ def medir_transformaciones_spark_standalone(
     executors: int,
     *,
     solo_t3: bool,
+    solo_t1: bool = False,
     abrir_spark_ui: bool = False,
     repeticiones: int = REPETICIONES_OFICIALES,
 ) -> tuple[list[MedicionCruda], list[TiempoPreparacion], list[CalentamientoDescartado]]:
     """Mide Spark Standalone y garantiza siempre el cierre de la aplicación."""
+    if solo_t1 and solo_t3:
+        raise ValueError("solo_t1 y solo_t3 no pueden activarse simultaneamente")
     spark: SparkSession | None = None
     solicitudes: DataFrame | None = None
     laboratorios: DataFrame | None = None
@@ -461,8 +464,11 @@ def medir_transformaciones_spark_standalone(
         if not solo_t3:
             operaciones: tuple[tuple[str, Callable[[], DataFrame]], ...] = (
                 ("T1", lambda: ts.t1_filtrado_compuesto(solicitudes)),
-                ("T2", lambda: ts.t2_agregaciones_por_laboratorio(solicitudes)),
             )
+            if not solo_t1:
+                operaciones += (
+                    ("T2", lambda: ts.t2_agregaciones_por_laboratorio(solicitudes)),
+                )
             for nombre, operacion in operaciones:
                 mediciones.extend(
                     medir_repeticiones(
@@ -476,24 +482,25 @@ def medir_transformaciones_spark_standalone(
                     )
                 )
 
-        mediciones.extend(
-            medir_repeticiones(
-                motor="pyspark",
-                transformacion="T3",
-                configuracion=configuracion,
-                operacion=lambda: ts.t3_join_laboratorios(
-                    solicitudes, laboratorios
-                ),
-                materializar=_materializar_spark,
-                registro_calentamientos=calentamientos,
-                repeticiones=repeticiones,
+        if not solo_t1:
+            mediciones.extend(
+                medir_repeticiones(
+                    motor="pyspark",
+                    transformacion="T3",
+                    configuracion=configuracion,
+                    operacion=lambda: ts.t3_join_laboratorios(
+                        solicitudes, laboratorios
+                    ),
+                    materializar=_materializar_spark,
+                    registro_calentamientos=calentamientos,
+                    repeticiones=repeticiones,
+                )
             )
-        )
 
-        if abrir_spark_ui and executors == EXECUTORS_BASE and not solo_t3:
+        if abrir_spark_ui and executors == EXECUTORS_BASE and not solo_t3 and not solo_t1:
             _abrir_spark_ui_para_evidencia(spark)
 
-        if not solo_t3:
+        if not solo_t3 and not solo_t1:
             inicio_preparacion = time.perf_counter()
             entrada_t4 = ts.t3_join_laboratorios(
                 solicitudes, laboratorios
