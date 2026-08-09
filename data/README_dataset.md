@@ -1,72 +1,178 @@
 # Dataset sintético de solicitudes de reserva de laboratorios
 
-## Dominio, naturaleza y propósito
+**GA-SUM-05 / PE-U4 — FUVV — Sistema de Control de Laboratorios Informáticos (SCLI)**
 
-**Dominio:** FUVV – Laboratorios Informáticos.
+## Descripción
 
-Este dataset es **sintético y reproducible**. Se utiliza porque no existen 500 000 registros operacionales públicos adecuados para este experimento, porque permite controlar el volumen y conservar el esquema conceptual requerido, y porque evita utilizar información personal real de estudiantes, docentes u otros usuarios. Los registros **no son datos reales ni operacionales de la Universidad Técnica Estatal de Quevedo (UTEQ)**; se crearon exclusivamente para fines académicos y para comparar cargas y transformaciones equivalentes en pandas y PySpark.
+Este directorio contiene el conjunto de datos utilizado en la práctica experimental **GA-SUM-05 / PE-U4 — Procesamiento Distribuido con Apache Spark**. El dataset es **sintético, reproducible y de uso exclusivamente académico**. Fue creado para ejecutar y comparar las mismas transformaciones mediante **pandas** y **PySpark 3.5.0**.
 
-## Reproducción y verificación
+Los registros no corresponden a datos reales u operacionales de la Universidad Técnica Estatal de Quevedo (UTEQ) y no contienen información personal real.
 
-- Fuente: **Generación sintética reproducible mediante script propio**.
-- Generador: `src/generar_dataset.py`.
-- Semilla fija: `20260804`.
-- Fecha real de última regeneración: **2026-08-05**.
-- Comando exacto de generación: `python src/generar_dataset.py`.
-- Comando exacto de verificación: `python src/generar_dataset.py --verificar`.
-- URL permanente del script: **https://github.com/ffarinangog2/pe-u4-spark-equipo-c**.
-- Licencia del dataset: **MIT**, conforme al archivo `LICENSE` de la raíz, que cubre el software y los archivos de datos sintéticos publicados con este proyecto.
+| Archivo                   | Registros | Columnas | Tamaño aproximado |
+| ------------------------- | --------: | -------: | ----------------: |
+| `solicitudes_reserva.csv` |   500 000 |       14 |        168.53 MiB |
+| `laboratorios.csv`        |        40 |       10 |          0.01 MiB |
 
-Dos regeneraciones consecutivas realizadas con la misma semilla produjeron las mismas huellas SHA-256 indicadas a continuación.
+## Generación y verificación
 
-## Archivos reales
+El dataset puede generarse nuevamente mediante:
 
-| Archivo | Naturaleza | Registros | Columnas | Tamaño exacto (bytes) | Tamaño (MiB) | SHA-256 |
-|---|---|---:|---:|---:|---:|---|
-| `solicitudes_reserva.csv` | Tabla principal sintética de solicitudes | 500 000 | 14 | 176 712 866 | 168.53 | `974402873a0b7e6a6f18b4b90f43e146a4a4b6524561ad1769c3077437035783` |
-| `laboratorios.csv` | Tabla dimensional sintética de laboratorios | 40 | 10 | 8 754 | 0.01 | `756567789ea2ad9483918b6305a66f937d511f693b66e404bea2d2c39a9adbc5` |
+```bash
+python src/generar_dataset.py
+```
 
-Los conteos excluyen la fila de encabezado. Los tamaños y hashes se calcularon directamente sobre los archivos regenerados.
+Para comprobar su integridad:
 
-## Esquema de `solicitudes_reserva.csv`
+```bash
+python src/generar_dataset.py --verificar
+```
 
-| Columna | Tipo de dato al cargar | Descripción |
-|---|---|---|
-| `solicitud_id` | string (UUID) | Identificador único de la solicitud. |
-| `solicitante_id` | string (UUID) | Identificador sintético del solicitante. |
-| `docente_id` | string (UUID) | Identificador sintético del docente. |
-| `laboratorio_id` | string (UUID) | Clave foránea hacia `laboratorios.csv`. |
-| `materia_id` | string (UUID) | Identificador sintético de la materia. |
-| `periodo_lectivo_id` | string (UUID) | Identificador sintético del periodo lectivo. |
-| `fecha_reserva` | date | Fecha solicitada. |
-| `hora_inicio` | time | Hora de inicio. |
-| `hora_fin` | time | Hora de fin, posterior a `hora_inicio`. |
-| `numero_participantes` | integer | Participantes, mayor que cero y no superior a la capacidad. |
-| `motivo` | string | Motivo académico o institucional sintético. |
-| `estado` | string | Estado de la solicitud. |
-| `creada_en` | timestamp UTC | Creación de la solicitud. |
-| `actualizada_en` | timestamp UTC | Última actualización de la solicitud. |
+Parámetros principales:
 
-## Esquema de `laboratorios.csv`
+- **Generador:** `src/generar_dataset.py`
+- **Semilla fija:** `20260804`
+- **Fecha documentada:** `2026-08-05`
+- **Licencia:** MIT
 
-| Columna | Tipo de dato al cargar | Descripción |
-|---|---|---|
-| `laboratorio_id` | string (UUID) | Identificador único del laboratorio. |
-| `piso_id` | string (UUID) | Identificador sintético del piso. |
-| `codigo` | string | Código único del laboratorio. |
-| `nombre` | string | Nombre sintético del laboratorio. |
-| `capacidad` | integer | Capacidad máxima positiva. |
-| `descripcion` | string | Propósito del laboratorio. |
-| `estado` | string | Estado del laboratorio. |
-| `activo` | boolean | Indicador de habilitación. |
-| `creado_en` | timestamp UTC | Creación del registro. |
-| `actualizado_en` | timestamp UTC | Última actualización del registro. |
+La verificación comprueba la cantidad de registros, estructura de columnas, identificadores únicos, integridad referencial, valores obligatorios, horarios, número de participantes, capacidad de los laboratorios y huellas criptográficas SHA-256.
 
-## Relación
+## Archivos de gran tamaño no incluidos en GitHub
 
-La relación es **uno a muchos (1:N)** mediante `laboratorio_id`: cada solicitud referencia exactamente un laboratorio existente y un laboratorio puede aparecer en muchas solicitudes.
+Debido a las restricciones de tamaño de archivos de GitHub, algunos archivos generados y utilizados durante la práctica no se almacenan directamente mediante el flujo convencional de Git.
+
+El caso principal es:
 
 ```text
-laboratorios (1) ───────── (N) solicitudes_reserva
-laboratorio_id                 laboratorio_id
+data/solicitudes_reserva.csv
 ```
+
+Este archivo contiene **500 000 registros, 14 columnas y 176 712 866 bytes (aprox. 168.53 MiB)**.
+
+Su ausencia en GitHub se debe exclusivamente al tamaño del archivo y **no significa que haya sido omitido durante la ejecución del experimento**.
+
+La reproducibilidad no se ve afectada, porque el dataset puede reconstruirse localmente mediante el script generador, utilizando la semilla fija y verificando posteriormente su huella SHA-256.
+
+### Huellas SHA-256
+
+`solicitudes_reserva.csv`
+
+```text
+974402873a0b7e6a6f18b4b90f43e146a4a4b6524561ad1769c3077437035783
+```
+
+`laboratorios.csv`
+
+```text
+756567789ea2ad9483918b6305a66f937d511f693b66e404bea2d2c39a9adbc5
+```
+
+Algunas salidas intermedias generadas por pandas y PySpark también pueden alcanzar tamaños elevados y, por esta razón, no mantenerse versionadas en GitHub. Estas salidas son productos derivados y pueden regenerarse ejecutando nuevamente las transformaciones.
+
+El repositorio prioriza la conservación del **código fuente, scripts, tiempos experimentales, métricas, figuras, notebook, evidencias y documentación necesarios para reproducir el experimento**.
+
+## Relación entre los datasets
+
+Las tablas se relacionan mediante el atributo `laboratorio_id`, estableciendo una relación **1:N**, donde cada solicitud referencia un laboratorio y un laboratorio puede estar asociado con múltiples solicitudes.
+
+## Transformaciones evaluadas
+
+Durante el experimento se ejecutan cinco transformaciones equivalentes en pandas y PySpark:
+
+- **T1:** filtrado compuesto y selección de columnas.
+- **T2:** agrupación por laboratorio y cálculo de agregaciones.
+- **T3:** `INNER JOIN` entre solicitudes y laboratorios.
+- **T4:** cálculo de una columna derivada de prioridad.
+- **T5:** ordenamiento y selección del **Top-20 de laboratorios de mayor demanda**.
+
+## Esquema resumido
+
+### `solicitudes_reserva.csv`
+
+Contiene los siguientes atributos:
+
+```text
+solicitud_id
+solicitante_id
+docente_id
+laboratorio_id
+materia_id
+periodo_lectivo_id
+fecha_reserva
+hora_inicio
+hora_fin
+numero_participantes
+motivo
+estado
+creada_en
+actualizada_en
+```
+
+### `laboratorios.csv`
+
+Contiene los siguientes atributos:
+
+```text
+laboratorio_id
+piso_id
+codigo
+nombre
+capacidad
+descripcion
+estado
+activo
+creado_en
+actualizado_en
+```
+
+## Implementaciones y salidas
+
+Las implementaciones utilizadas para realizar las transformaciones se encuentran en:
+
+```text
+src/transformaciones_pandas.py
+src/transformaciones_spark.py
+```
+
+Las salidas generadas durante el procesamiento se organizan en:
+
+```text
+data/pandas/
+data/spark/
+```
+
+Los resultados experimentales oficiales se almacenan principalmente en:
+
+```text
+resultados/tiempos_crudos.csv
+resultados/tiempos_resumen.csv
+resultados/metricas_derivadas.csv
+```
+
+## Reproducibilidad
+
+La reproducibilidad del experimento se sustenta en:
+
+- el script generador del dataset;
+- la semilla fija `20260804`;
+- el esquema de datos documentado;
+- las huellas SHA-256;
+- las implementaciones equivalentes en pandas y PySpark;
+- los archivos de resultados experimentales.
+
+De esta manera, cualquier revisor puede regenerar localmente los archivos, comprobar su integridad y volver a ejecutar las transformaciones utilizadas durante la práctica.
+
+## Privacidad
+
+Todos los identificadores, fechas, motivos, estados y demás valores incluidos en los datasets fueron generados artificialmente.
+
+No se utilizaron nombres reales, correos electrónicos, números de identificación ni registros institucionales reales pertenecientes a estudiantes, docentes o personal de la UTEQ.
+
+## Licencia
+
+El dataset sintético y los scripts asociados se distribuyen bajo la **Licencia MIT**.
+
+## Nota sobre el repositorio
+
+La ausencia de determinados archivos de gran tamaño en GitHub **no representa una ausencia de evidencia experimental**. Los archivos pesados pueden reconstruirse utilizando los scripts incluidos y comprobarse mediante sus respectivas huellas SHA-256.
+
+Esta estrategia permite mantener el repositorio reproducible y verificable, evitando al mismo tiempo problemas derivados de las restricciones de tamaño establecidas por GitHub.
